@@ -7,12 +7,9 @@ from google.generativeai.types import BlockedPromptException # นำเข้�
 
 app = Flask(__name__)
 
-# --- การตั้งค่า Gemini API ---
-# สำคัญ: คุณต้องใส่ Gemini API Key ของคุณที่นี่
-# หากคุณรันบน Raspberry Pi ของคุณเอง, การใส่ API Key ตรงๆ อาจจะทำได้
-# แต่สำหรับ Production Environment แนะนำให้ใช้ Environment Variables เพื่อความปลอดภัย
+
 # genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-genai.configure(api_key="") # <<< ใส่ API Key ของคุณที่นี่
+genai.configure(api_key="") # <<< ใส่ API Key 
 
 # --- Route สำหรับหน้า Dashboard หลัก ---
 @app.route('/')
@@ -31,7 +28,7 @@ def get_data():
     print(f"--- Flask: Received from sensor_reader_module: {sensor_data}") # เพิ่ม Log
     return jsonify(sensor_data)
 
-# --- API Endpoint สำหรับการวิเคราะห์โดย Gemini AI ---
+# --- API Endpoint สำหรับการวิเคราะห์โดย AI ---
 @app.route('/api/ai', methods=['POST'])
 def analyze_with_gemini():
     """
