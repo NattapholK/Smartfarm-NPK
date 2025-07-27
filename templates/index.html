@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NPK Sensor Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* กำหนด Font Family เป็น Inter */
+    body {
+        font-family: 'Inter', sans-serif;
+    }
+    .transition-smooth {
+      transition: all 0.4s ease-in-out;
+    }
+    .card {
+      animation: fadeInUp 0.8s ease forwards;
+      opacity: 0;
+      /* ลบ border-radius: 12px; เพื่อให้ตรงกับโค้ดเดิมของคุณ */
+    }
+    @keyframes fadeInUp {
+      0% {
+        transform: translateY(20px);
+        opacity: 0;
+      }
+      100% {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+    .glow:hover {
+      box-shadow: 0 0 15px rgba(34, 197, 94, 0.6);
+      transform: scale(1.02);
+    }
+    /* Ensure responsive layout for small screens */
+    @media (max-width: 768px) {
+      .grid-cols-2 {
+        grid-template-columns: 1fr;
+      }
+      .md\:col-span-2 {
+        grid-column: auto;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-green-100 to-white min-h-screen font-sans">
+  <!-- Header -->
+  <header class="bg-green-600 text-white p-4 shadow-md">
+    <h1 class="text-2xl font-bold animate-pulse">🌱 NPK Soil Dashboard</h1>
+  </header>
+
+  <!-- Main Section -->
+  <main class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- NPK + Extra Values -->
+    <section class="card bg-white rounded-2xl shadow-md p-6 transition-smooth hover:shadow-xl glow">
+      <h2 class="text-xl font-bold mb-4">🌾 Sensor Readings</h2>
+      <div class="grid grid-cols-2 gap-4 text-center">
+        <div>
+          <p class="text-gray-600">Humidity</p>
+          <p id="humidity" class="text-2xl text-indigo-500 font-bold">--%</p>
+        </div>
+        <div>
+          <p class="text-gray-600">Temperature</p>
+          <p id="temperature" class="text-2xl text-red-500 font-bold">--°C</p>
+        </div>
+        <div>
+          <p class="text-gray-600">EC</p>
+          <p id="ec" class="text-2xl text-yellow-500 font-bold">-- µS/cm</p>
+        </div>
+        <div>
+          <p class="text-gray-600">pH</p>
+          <p id="ph" class="text-2xl text-green-500 font-bold">--</p>
+        </div>
+        <div>
+          <p class="text-gray-600">Nitrogen (N)</p>
+          <p id="nValue" class="text-2xl text-blue-500 font-bold">-- mg/kg</p>
+        </div>
+        <div>
+          <p class="text-gray-600">Phosphorus (P)</p>
+          <p id="pValue" class="text-2xl text-yellow-700 font-bold">-- mg/kg</p>
+        </div>
+        <div>
+          <p class="text-gray-600">Potassium (K)</p>
+          <p id="kValue" class="text-2xl text-pink-500 font-bold">-- mg/kg</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chart -->
+    <section class="card bg-white rounded-2xl shadow-md p-6 transition-smooth hover:shadow-xl glow">
+      <h2 class="text-xl font-bold mb-4">Soil Composition Trend</h2>
+      <canvas id="npkChart"></canvas>
+    </section>
+
+    <!-- Gemini Analysis -->
+    <section class="card bg-white rounded-2xl shadow-md p-6 transition-smooth hover:shadow-xl glow md:col-span-2">
+      <h2 class="text-xl font-bold mb-4">🌿 Gemini Soil Assistant</h2>
+      <!-- เพิ่ม form tag เพื่อควบคุมการ submit -->
+      <form onsubmit="askGemini(event)"> 
+        <div class="mb-4">
+          <textarea id="questionInput" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-400" placeholder="พิมพ์คำถามเกี่ยวกับสภาพดินของคุณ เช่น ดินของฉันเหมาะกับพืชอะไร?"></textarea>
+        </div>
+        <button id="askGeminiBtn" type="submit" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-smooth animate-bounce">ถาม Gemini</button>
+      </form>
+      
+      <!-- Loading Indicator และ Gemini Response -->
+      <div id="loadingIndicator" class="mt-4 text-gray-600 text-center hidden">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mx-auto"></div>
+        <p class="mt-2">กำลังวิเคราะห์ข้อมูลโดย Gemini...</p>
+      </div>
+      <div id="geminiResponse" class="mt-4 text-gray-800 bg-green-50 border-l-4 border-green-400 p-3 rounded hidden">
+        <!-- Gemini response will be displayed here -->
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Apply animation delay to cards
+    document.querySelectorAll('.card').forEach((el, index) => {
+      el.style.animationDelay = `${index * 0.1}s`;
+    });
+
+    // Global variable to store sensor data
+    let currentSensorData = {
+      humidity: '--',
+      temperature: '--',
+      ec: '--',
+      ph: '--',
+      nitrogen: '--',
+      phosphorus: '--',
+      potassium: '--'
+    };
+
+    const ctx = document.getElementById('npkChart').getContext('2d');
+    const npkChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Nitrogen', 'Phosphorus', 'Potassium'],
+        datasets: [{
+          label: 'NPK Composition (mg/kg)',
+          data: [0, 0, 0],
+          backgroundColor: ['#3b82f6', '#facc15', '#ef4444']
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        animation: { duration: 1500, easing: 'easeOutQuart' },
+        scales: { 
+          y: { 
+            beginAtZero: true, 
+            max: 60, // ค่า max ของแกน Y ที่มาจากโค้ดเดิมของคุณ
+            title: {
+                display: true,
+                text: 'mg/kg'
+            }
+          },
+          x: {
+            grid: {
+                display: false
+            }
+          }
+        }
+      }
+    });
+
+    // --- Logic สำหรับดึงข้อมูลเซ็นเซอร์จาก Flask API ---
+    async function fetchSensorData() {
+      try {
+        const res = await fetch('/api/data');
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        const data = await res.json();
+
+        if (data.error) {
+            console.error("Sensor data error:", data.error);
+            return;
+        }
+
+        // Store the fetched data in the global variable
+        currentSensorData = data;
+
+        document.getElementById('humidity').innerText = `${data.humidity}%`;
+        document.getElementById('temperature').innerText = `${data.temperature}°C`;
+        document.getElementById('ec').innerText = `${data.ec} µS/cm`;
+        document.getElementById('ph').innerText = `${data.ph}`;
+        document.getElementById('nValue').innerText = `${data.nitrogen} mg/kg`;
+        document.getElementById('pValue').innerText = `${data.phosphorus} mg/kg`;
+        document.getElementById('kValue').innerText = `${data.potassium} mg/kg`;
+
+        // update chart
+        npkChart.data.datasets[0].data = [data.nitrogen, data.phosphorus, data.potassium];
+        npkChart.update();
+      } catch (err) {
+        console.error('Error fetching sensor data:', err);
+      }
+    }
+
+    // --- การเรียก Gemini AI ผ่าน Flask API ---
+    async function askGemini(event) {
+      event.preventDefault(); // ป้องกัน Default Action ของเบราว์เซอร์ (สำคัญมาก!)
+
+      const question = document.getElementById('questionInput').value.trim();
+      const geminiResponseDiv = document.getElementById('geminiResponse');
+      const loadingIndicator = document.getElementById('loadingIndicator');
+      const askGeminiBtn = document.getElementById('askGeminiBtn');
+
+      if (!question) {
+        geminiResponseDiv.textContent = 'โปรดพิมพ์คำถามของคุณก่อน';
+        geminiResponseDiv.classList.remove('hidden');
+        geminiResponseDiv.style.backgroundColor = '#f8d7da'; /* bg-red-50 */
+        geminiResponseDiv.style.borderColor = '#dc3545'; /* border-red-400 */
+        geminiResponseDiv.style.color = '#721c24'; /* text-red-700 */
+        return;
+      }
+
+      // Show loading, hide response
+      loadingIndicator.classList.remove('hidden');
+      geminiResponseDiv.classList.add('hidden');
+      askGeminiBtn.disabled = true; // Disable button during API call
+      askGeminiBtn.classList.remove('animate-bounce'); // Stop bounce animation
+
+      try {
+        // ส่งคำถามและข้อมูลเซ็นเซอร์ไปยัง Flask API Endpoint ด้วย method POST
+        const res = await fetch('/api/ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: question,
+            sensorData: currentSensorData // ส่งข้อมูลเซ็นเซอร์ปัจจุบันไปด้วย
+          })
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
+        const result = await res.json();
+        const geminiText = result.result || 'ไม่สามารถรับคำตอบจาก Gemini ได้';
+
+        geminiResponseDiv.textContent = geminiText;
+        geminiResponseDiv.classList.remove('hidden');
+        geminiResponseDiv.style.backgroundColor = '#d4edda'; /* bg-green-50 */
+        geminiResponseDiv.style.borderColor = '#28a745'; /* border-green-400 */
+        geminiResponseDiv.style.color = '#155724'; /* text-green-700 */
+
+      } catch (error) {
+        console.error('เกิดข้อผิดพลาดในการเรียก Gemini AI ผ่าน Flask:', error);
+        geminiResponseDiv.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อกับ Gemini AI โปรดตรวจสอบการเชื่อมต่อกับเซิร์ฟเวอร์ Flask ของคุณ.';
+        geminiResponseDiv.classList.remove('hidden');
+        geminiResponseDiv.style.backgroundColor = '#f8d7da'; /* bg-red-50 */
+        geminiResponseDiv.style.borderColor = '#dc3545'; /* border-red-400 */
+        geminiResponseDiv.style.color = '#721c24'; /* text-red-700 */
+      } finally {
+        loadingIndicator.classList.add('hidden'); // Hide loading
+        askGeminiBtn.disabled = false; // Enable button
+        askGeminiBtn.classList.add('animate-bounce'); // Resume bounce animation
+      }
+    }
+
+    fetchSensorData();
+    setInterval(fetchSensorData, 10000); // refresh every 10 seconds
+  </script>
+</body>
+</html>
